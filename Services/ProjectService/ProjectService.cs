@@ -811,48 +811,58 @@ namespace TelemarketingControlSystem.Services.ProjectService
 		}
 		public ResultWithMessage updateProjectDetail(ProjectDetailViewModel model, TenantDto authData)
 		{
-			ProjectDetail projectDetailToUpdate = _db.ProjectDetails.AsNoTracking().SingleOrDefault(e => e.Id == model.Id);
+			// Step 1: Retrieve the existing project detail
+			var projectDetailToUpdate = _db.ProjectDetails
+				.AsNoTracking()
+				.SingleOrDefault(e => e.Id == model.Id);
 
 			if (projectDetailToUpdate is null)
-				return new ResultWithMessage(null, $"Empty Project Detail");
+				return new ResultWithMessage(null, "Empty Project Detail");
 
-			if (model.LastUpdateDate != null)
-			{
-				model.LastUpdateDate = Utilities.convertDateToArabStandardDate((DateTime)model.LastUpdateDate).Date;
-			}
+			// Step 2: Determine the LastUpdatedDate
+			var lastUpdatedDate = model.LastUpdateDate.HasValue
+				? Utilities.convertDateToArabStandardDate(model.LastUpdateDate.Value)
+				: Utilities.convertDateToArabStandardDate(DateTime.UtcNow);
 
+			// Step 3: Update only the intended fields
 			projectDetailToUpdate.CallStatusId = model.CallStatusId;
 			projectDetailToUpdate.EmployeeId = model.EmployeeID;
 			projectDetailToUpdate.Note = model.Note;
 			projectDetailToUpdate.LastUpdatedBy = authData.userName;
-			projectDetailToUpdate.LastUpdatedDate = model.LastUpdateDate ?? DateTime.Now;
+			projectDetailToUpdate.LastUpdatedDate = lastUpdatedDate;
 
+			// Step 4: Save changes
 			_db.ProjectDetails.Update(projectDetailToUpdate);
 			_db.SaveChanges();
 
-			ProjectDetail updatedProjectDetail = _db.ProjectDetails
+			// Step 5: Fetch the updated data with related entities
+			var updatedProjectDetail = _db.ProjectDetails
 				.Include(e => e.Project)
 				.Include(e => e.CallStatus)
 				.Include(e => e.Employee)
 				.SingleOrDefault(e => e.Id == model.Id);
 
-			UpdatedProjectDetailViewModel result = new()
+			if (updatedProjectDetail == null)
+				return new ResultWithMessage(null, "Updated Project Detail not found");
+
+			// Step 6: Prepare the response view model
+			var result = new UpdatedProjectDetailViewModel
 			{
 				Id = updatedProjectDetail.Id,
 				City = updatedProjectDetail.City,
 				AlternativeNumber = updatedProjectDetail.AlternativeNumber,
 				Bundle = updatedProjectDetail.Bundle,
 				CallStatusId = updatedProjectDetail.CallStatusId,
-				CallStatus = updatedProjectDetail.CallStatus.Name,
+				CallStatus = updatedProjectDetail.CallStatus?.Name,
 				Contract = updatedProjectDetail.Contract,
 				EmployeeId = updatedProjectDetail.EmployeeId,
-				Employee = Utilities.modifyUserName(updatedProjectDetail.Employee.UserName),
+				Employee = Utilities.modifyUserName(updatedProjectDetail.Employee?.UserName),
 				Generation = updatedProjectDetail.Generation,
 				GSM = updatedProjectDetail.GSM,
 				LineType = updatedProjectDetail.LineType,
 				Note = updatedProjectDetail.Note,
 				ProjectId = updatedProjectDetail.ProjectId,
-				Project = updatedProjectDetail.Project.Name,
+				Project = updatedProjectDetail.Project?.Name,
 				Region = updatedProjectDetail.Region,
 				SegmentName = updatedProjectDetail.SegmentName,
 				SubSegment = updatedProjectDetail.SubSegment,
